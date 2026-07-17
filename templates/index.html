@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Disease Predictor</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-text">
+    <h1>Disease Prediction System</h1>
+    <p>Select your symptoms and let two AI models predict your condition</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="card symptom-card">
+    <div class="card-header">
+      <h2>Select Symptoms</h2>
+      <span class="badge" id="count-badge">0 selected</span>
+    </div>
+
+    <input type="text" id="search-box" placeholder="Search symptoms..." oninput="filterSymptoms()">
+
+    <div class="symptom-grid" id="symptom-grid">
+      {% for key, label in symptoms %}
+      <label class="symptom-item" data-label="{{ label.lower() }}">
+        <input type="checkbox" value="{{ key }}" onchange="updateCount()">
+        <span class="checkmark"></span>
+        <span class="symptom-label">{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="actions">
+      <button class="btn-secondary" onclick="clearAll()">Clear All</button>
+      <button class="btn-primary" id="predict-btn" onclick="predict()" disabled>
+        <span id="btn-text">Select symptoms to predict</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="results" class="results hidden">
+
+    <div class="loader hidden" id="loader">
+      <div class="spinner"></div>
+      <p>Analyzing symptoms...</p>
+    </div>
+
+    <div id="result-content">
+      <h2 class="section-title">Prediction Results</h2>
+
+      <div class="model-grid">
+        <div class="model-card knn-card">
+          <div class="model-header">
+            <div class="model-icon knn-icon">K</div>
+            <div>
+              <p class="model-name">KNN Model</p>
+              <p class="model-sub">K-Nearest Neighbors</p>
+            </div>
+          </div>
+          <p class="disease-name" id="knn-pred">—</p>
+          <div class="conf-row">
+            <span class="conf-label">Confidence</span>
+            <span class="conf-val" id="knn-conf">—</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill knn-fill" id="knn-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="model-card svm-card">
+          <div class="model-header">
+            <div class="model-icon svm-icon">S</div>
+            <div>
+              <p class="model-name">SVM Model</p>
+              <p class="model-sub">Support Vector Machine</p>
+            </div>
+          </div>
+          <p class="disease-name" id="svm-pred">—</p>
+          <div class="conf-row">
+            <span class="conf-label">Confidence</span>
+            <span class="conf-val" id="svm-conf">—</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill svm-fill" id="svm-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="agreement-box"></div>
+
+      <p class="disclaimer">⚠️ For educational purposes only. This is not medical advice.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function updateCount() {
+    const checked = document.querySelectorAll('input[type=checkbox]:checked').length;
+    document.getElementById('count-badge').textContent = checked + ' selected';
+    const btn = document.getElementById('predict-btn');
+    const txt = document.getElementById('btn-text');
+    if (checked > 0) {
+      btn.disabled = false;
+      txt.textContent = 'Predict Disease →';
+    } else {
+      btn.disabled = true;
+      txt.textContent = 'Select symptoms to predict';
+    }
+  }
+
+  function clearAll() {
+    document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateCount();
+    document.getElementById('results').classList.add('hidden');
+  }
+
+  function filterSymptoms() {
+    const query = document.getElementById('search-box').value.toLowerCase();
+    document.querySelectorAll('.symptom-item').forEach(item => {
+      item.style.display = item.dataset.label.includes(query) ? 'flex' : 'none';
+    });
+  }
+
+  function predict() {
+    const selected = [...document.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+    const results = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const content = document.getElementById('result-content');
+
+    results.classList.remove('hidden');
+    loader.classList.remove('hidden');
+    content.style.opacity = '0';
+
+    fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symptoms: selected })
+    })
+    .then(res => res.json())
+    .then(data => {
+      loader.classList.add('hidden');
+      content.style.opacity = '1';
+
+      document.getElementById('knn-pred').textContent = data.knn_pred;
+      document.getElementById('svm-pred').textContent = data.svm_pred;
+      document.getElementById('knn-conf').textContent = data.knn_conf + '%';
+      document.getElementById('svm-conf').textContent = data.svm_conf + '%';
+
+      setTimeout(() => {
+        document.getElementById('knn-bar').style.width = data.knn_conf + '%';
+        document.getElementById('svm-bar').style.width = data.svm_conf + '%';
+      }, 100);
+
+      const box = document.getElementById('agreement-box');
+      if (data.agree) {
+        box.className = 'agreement agree';
+        box.innerHTML = '<strong>✅ Both models agree</strong> — high reliability prediction.';
+      } else {
+        box.className = 'agreement disagree';
+        box.innerHTML = '<strong>⚠️ Models disagree</strong> — results may be uncertain. Please consult a doctor.';
+      }
+
+      results.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+</script>
+
+</body>
+</html>
